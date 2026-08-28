@@ -1,0 +1,62 @@
+name: Build RomM image
+
+on:
+  repository_dispatch:
+    types: [romm-commit]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Upstream commit SHA to build (defaults to branch HEAD)"
+        required: false
+        default: ""
+
+env:
+  UPSTREAM_REPO: LoneAngelFayt/romm
+  UPSTREAM_BRANCH: feat/emulator-streaming-v2
+  IMAGE: ghcr.io/${{ github.repository_owner }}/romm
+
+concurrency:
+  group: build-romm
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Clone upstream branch
+        run: |
+          git clone --branch "$UPSTREAM_BRANCH" "https://github.com/${UPSTREAM_REPO}.git" romm
+
+      - name: Checkout referenced commit
+        id: ref
+        working-directory: romm
+        run: |
+          SHA="${{ github.event.client_payload.sha || github.event.inputs.sha }}"
+          if [ -n "$SHA" ]; then
+            git fetch origin "$SHA"
+            git checkout "$SHA"
+          fi
+          FULL=$(git rev-parse HEAD)
+          echo "sha=$FULL" >> "$GITHUB_OUTPUT"
+          echo "Building ${UPSTREAM_REPO}@${FULL}"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image
+        working-directory: romm
+        run: |
+          docker build -t "$IMAGE:latest" -f docker/Dockerfile .
+          docker tag "$IMAGE:latest" "$IMAGE:${{ steps.ref.outputs.sha }}"
+
+      - name: Push image
+        run: |
+          docker push "$IMAGE:latest"
+          docker push "$IMAGE:${{ steps.ref.outputs.sha }}"
