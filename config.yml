@@ -1,0 +1,119 @@
+# RomM configuration for the streaming test stack.
+#
+# This file is fetched by streaming-tester.sh and dropped into ./romm-config/
+# of the isolated test stack. Every platform the webstation broker can serve
+# is enabled so testers can try streaming on whatever they have. Trim the list
+# on a real deployment; for testing, leave it alone.
+#
+# Full reference for every key:
+# https://github.com/LoneAngelFayt/romm/blob/feat/emulator-streaming-v2/examples/config.example.yml
+
+exclude:
+  platforms:
+    # A flat "bios" folder next to the platform folders is common; it is not
+    # a platform, so keep it out of the scan.
+    - bios
+
+streaming:
+  enabled: true
+  containers:
+    - protocol: webstation
+      # Same-origin path: Caddy proxies /streaming/* to the webstation
+      # container and everything else to RomM, all on one https port.
+      host: /streaming
+      # Server-to-broker address over the compose network (plain http).
+      broker_host: http://webstation:3000
+      subfolder: /streaming
+      # Where the webstation container mounts the ROM library.
+      library_path: /romm
+      # Replaced with a generated secret by streaming-tester.sh; must match
+      # BROKER_SECRET on the webstation container.
+      broker_secret: __BROKER_SECRET__
+      label: WEBSTATION
+
+      platforms:
+        # ---- Sony ----
+        psx: duckstation
+        ps2:
+          emulator: pcsx2
+          label: PCSX2
+          memory_card_sync: true
+        psp: retroarch
+        ps3: rpcs3
+        ps4: shadps4
+
+        # ---- Nintendo ----
+        nes: retroarch
+        famicom: retroarch
+        fds: retroarch
+        snes: retroarch
+        sfam: retroarch
+        n64: retroarch
+        gb: retroarch
+        gbc: retroarch
+        gba: retroarch
+        virtualboy: retroarch
+        nds: retroarch
+        ngc:
+          emulator: dolphin
+          label: Dolphin
+          memory_card_sync: true
+        wii: dolphin
+        3ds: retroarch
+        wiiu: cemu
+        switch: eden
+
+        # ---- Microsoft ----
+        xbox: xemu
+        xbox360: xenia
+
+        # ---- Sega ----
+        genesis: retroarch
+        sms: retroarch
+        gamegear: retroarch
+        sg1000: retroarch
+        segacd: retroarch
+        sega32: retroarch
+        saturn: retroarch
+        dc: retroarch
+
+        # ---- NEC ----
+        tg16: retroarch
+        supergrafx: retroarch
+        turbografx-cd: retroarch
+
+        # ---- SNK and arcade ----
+        arcade: retroarch
+        cps1: retroarch
+        cps2: retroarch
+        cps3: retroarch
+        neogeoaes: retroarch
+        neogeomvs: retroarch
+        neo-geo-cd: retroarch
+        neo-geo-pocket: retroarch
+        neo-geo-pocket-color: retroarch
+
+        # ---- Atari ----
+        atari2600: retroarch
+        atari5200: retroarch
+        atari7800: retroarch
+        lynx: retroarch
+        jaguar: retroarch
+        atari-st: retroarch
+
+        # ---- Other consoles and handhelds ----
+        wonderswan: retroarch
+        wonderswan-color: retroarch
+        3do: retroarch
+        colecovision: retroarch
+        intellivision: retroarch
+        vectrex: retroarch
+        odyssey-2: retroarch
+
+        # ---- Home computers ----
+        dos: retroarch
+        amiga: retroarch
+        c64: retroarch
+        msx: retroarch
+        msx2: retroarch
+        zxs: retroarch
