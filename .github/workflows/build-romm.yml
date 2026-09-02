@@ -12,7 +12,7 @@ on:
 
 env:
   UPSTREAM_REPO: LoneAngelFayt/romm
-  UPSTREAM_BRANCH: feat/emulator-streaming-v2
+  UPSTREAM_BRANCH: feat/streaming-webstation
   IMAGE: ghcr.io/${{ github.repository_owner }}/romm
 
 concurrency:
