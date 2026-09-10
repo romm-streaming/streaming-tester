@@ -2,13 +2,13 @@
 
 > **⚠️ This is a testing aid, not a product.**
 >
-> It exists so people can try RomM's new **emulator streaming** feature before it
-> ships and report back. It is **not actively maintained**, it **will not work on
-> every setup**, and it comes with no support. It targets one shape of machine:
-> a normal **Linux server** with **Docker + Docker Compose v2** and a
-> **supported GPU** (Intel, AMD, or NVIDIA). Unraid, TrueNAS, Podman, Docker
-> Desktop, macOS, Windows/WSL, rootless Docker and the like are untested and
-> probably broken.
+> It exists to get many people testing the **same known-good build** of RomM's
+> emulator streaming feature and report back through one channel. It is **not
+> actively maintained**, it **will not work on every setup**, and it comes with
+> no support. It targets one shape of machine: a normal **Linux server** with
+> **Docker + Docker Compose v2** and a **supported GPU** (Intel, AMD, or
+> NVIDIA). Unraid, TrueNAS, Podman, Docker Desktop, macOS, Windows/WSL,
+> rootless Docker and the like are untested and probably broken.
 
 ## What it does
 
@@ -24,6 +24,10 @@ from. It never touches an existing RomM install:
 - It is served over https on its own port (default `8443`).
 - Streaming is enabled for **every** platform the webstation container can
   serve, so you can test whatever you own.
+- **One pinned RomM + webstation build, no version picking.** The script
+  always pulls the same two image tags; there's nothing to choose and nothing
+  that quietly changes underneath you between runs. See
+  [What's in this repo](#whats-in-this-repo) for exactly what's pinned.
 
 Everything is removable with one command.
 
@@ -67,14 +71,33 @@ Run these from the install folder (prefix with `sudo` if the installer told you
 Docker needs it):
 
 ```bash
-docker compose up -d                          # start
-docker compose down                           # stop
-docker compose pull && docker compose up -d   # update to the newest test images
-docker compose logs -f                        # logs
+docker compose up -d      # start
+docker compose down       # stop
+docker compose logs -f    # logs
 ```
 
-Re-running the installer in the same folder offers to update, reconfigure
-(GPU / ROM path / port, keeping your data) or remove the stack.
+`docker compose pull` re-fetches the same pinned images (useful if a local
+image layer got corrupted); it will **not** change which build you're
+testing — the tags are fixed by `streaming-tester.sh` itself.
+
+Re-running the installer in the same folder offers to:
+
+- **Start it** — re-pull the pinned images and start, keeping your data.
+- **Reset RomM's database and config** — clears the RomM database, config, and
+  library cache while keeping your GPU / ROM path / port settings, the TLS
+  certificate, and your ROM library. Use this first if the stack breaks after
+  a stop/start; it fixes almost every "bad state" issue without you needing to
+  reinstall from scratch.
+- **Reconfigure it** — change GPU / ROM path / port, keeping your data.
+- **Remove it.**
+
+## Found a bug?
+
+Everyone running this script is on the exact same pinned images (the
+installer's summary prints both tags), so please report issues to
+**[romm-streaming/romm-broker/issues](https://github.com/romm-streaming/romm-broker/issues)**
+— not RomM's core support channels — and include the two image tags plus your
+GPU/driver info from the summary output.
 
 ## Remove it
 
@@ -88,10 +111,19 @@ that folder. Your ROM library is never touched.
 
 ## What's in this repo
 
-- `streaming-tester.sh` — the installer / remover.
+- `streaming-tester.sh` — the installer / remover. Pins exactly two images:
+  - `ghcr.io/romm-streaming/romm:streaming-v2` — built by this repo's own
+    workflow (below) from the commit that merged emulator streaming v2 into
+    upstream [rommapp/romm](https://github.com/rommapp/romm)
+    ([rommapp/romm#4314](https://github.com/rommapp/romm/pull/4314)).
+  - `linuxserver/webstation:romm-v0.8.0-ls17` — the webstation build matched to
+    the RomM v0.8.0 release that shipped alongside it.
+  - Neither tag moves on its own. Bumping either pin means editing this script
+    (and, for the RomM image, re-running the workflow below with a new `sha`)
+    and cutting a new version of this repo — never something that happens
+    silently underneath a tester.
 - `config.yml` — the RomM config the installer drops into the test stack, with
   streaming enabled for every supported platform.
-- `.github/workflows/build-romm.yml` — builds `ghcr.io/romm-streaming/romm` from
-  upstream [rommapp/romm](https://github.com/rommapp/romm), pinned by default to
-  the commit that merged emulator streaming v2
-  ([rommapp/romm#4314](https://github.com/rommapp/romm/pull/4314)).
+- `.github/workflows/build-romm.yml` — builds and pushes the
+  `ghcr.io/romm-streaming/romm:streaming-v2` tag above from upstream
+  `rommapp/romm`, defaulting to the emulator-streaming-v2 merge commit.

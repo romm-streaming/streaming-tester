@@ -18,14 +18,20 @@
 set -euo pipefail
 
 RAW_BASE="${STREAMING_TESTER_RAW:-https://raw.githubusercontent.com/romm-streaming/streaming-tester/main}"
-ROMM_IMAGE="ghcr.io/romm-streaming/romm:latest"
-WEBSTATION_IMAGE="linuxserver/webstation:romm"
+# Pinned on purpose: this tester exists to get many people testing the SAME
+# known-good streaming build, not whatever upstream happens to be today.
+# These two tags only change when a new release of this script bumps them
+# (RomM built from the emulator-streaming-v2 merge, rommapp/romm#4314;
+# webstation matched to the RomM v0.8.0 release it shipped alongside).
+ROMM_IMAGE="ghcr.io/romm-streaming/romm:streaming-v2"
+WEBSTATION_IMAGE="linuxserver/webstation:romm-v0.8.0-ls17"
 DB_IMAGE="mariadb:11"
 PROXY_IMAGE="caddy:2"
 PROJECT="streaming-test"
 MARKER=".streaming-tester"
 DEFAULT_PORT=8443
 NVIDIA_MIN_DRIVER=595
+ISSUES_URL="https://github.com/romm-streaming/romm-broker/issues"
 
 STACK_DIR="$(pwd)"
 
@@ -509,7 +515,14 @@ CADDY
 #
 #   ${COMPOSE_CMD} up -d      start
 #   ${COMPOSE_CMD} down       stop
-#   ${COMPOSE_CMD} pull && ${COMPOSE_CMD} up -d   update to the newest test images
+#   ${COMPOSE_CMD} pull && ${COMPOSE_CMD} up -d   re-fetch these exact pinned
+#                                                 images (fixes a corrupted
+#                                                 local layer; does NOT change
+#                                                 what version you're testing)
+#
+# Image tags are pinned by streaming-tester.sh itself, not by this compose
+# file. To test a newer build, re-run the installer once a new version of
+# streaming-tester.sh raises the pin.
 
 services:
   romm:
@@ -649,20 +662,71 @@ print_summary() {
   Managing the stack (run from $STACK_DIR):
     ${COMPOSE_CMD} up -d             start
     ${COMPOSE_CMD} down              stop
-    ${COMPOSE_CMD} pull && ${COMPOSE_CMD} up -d
-                                     update to the newest test images
     ${COMPOSE_CMD} logs -f           watch logs
+
+  Something broken? Re-running the installer here offers a one-command reset
+  that wipes this stack's database and config but keeps your GPU/ROM/port
+  settings, in case a bad state (not a real bug) is the cause:
+    curl -fsSL ${RAW_BASE}/streaming-tester.sh | bash
 
   Remove everything except your ROMs:
     curl -fsSL ${RAW_BASE}/streaming-tester.sh | bash -s -- remove
 
   GPU: ${SELECTED_GPU_NAME} (${GPU_MODE})
   ROMs: ${ROMS_PATH} (read-only)
+  RomM image: ${ROMM_IMAGE}
+  Webstation image: ${WEBSTATION_IMAGE}
+
+  Found a bug? Everyone running this script is on the exact same pinned
+  images above, so please report it (not in core RomM support channels):
+    ${ISSUES_URL}
+  Include the two image lines above plus your GPU/driver info exactly as
+  printed here — that's the whole point of testing one pinned build.
 TXT
   if [ -n "${NVIDIA_MODESET_WARN:-}" ]; then
     warn "/dev/nvidia-modeset was not present when this stack was generated; streaming may not work properly."
   fi
   hr
+}
+
+reset_stack() {
+  [ -f "$MARKER" ] || die "$STACK_DIR does not look like a streaming test stack (no $MARKER file). Run this from the folder you installed into."
+  echo
+  hr
+  printf '%sThis resets RomM'"'"'s database and config in:%s %s\n' "$C_YEL" "$C_RST" "$STACK_DIR"
+  hr
+  echo "Everyone testing this stack is on the same pinned images, so a broken"
+  echo "database migration or stale config is almost always fixed by starting"
+  echo "RomM's data fresh. This clears the RomM database, config, and library"
+  echo "metadata/cache. It keeps:"
+  echo "  - your GPU / ROM path / port settings"
+  echo "  - the webstation home folder and TLS certificate"
+  echo "  - your ROM library (never touched)"
+  echo
+  ask_yn "Reset RomM's database and config?" n || { echo "Nothing reset."; return 0; }
+
+  if [ -f docker-compose.yml ]; then
+    info "Stopping containers"
+    "${COMPOSE[@]}" down --remove-orphans || warn "compose down failed; continuing with reset"
+  fi
+
+  info "Clearing RomM database and config"
+  rm -rf romm-db romm-config romm-resources romm-assets romm-redis-data
+
+  PORT="$(marker_get PORT)"; ROMS_PATH="$(marker_get ROMS_PATH)"; GPU_MODE="$(marker_get GPU_MODE)"
+  SELECTED_GPU_NAME="$(marker_get GPU_NAME)"
+  if [ "$GPU_MODE" = "nvidia" ]; then
+    NVIDIA_MODESET_DEV=""
+    if [ -e /dev/nvidia-modeset ]; then
+      NVIDIA_MODESET_DEV=/dev/nvidia-modeset
+    else
+      NVIDIA_MODESET_WARN=1
+    fi
+  fi
+  write_stack
+  start_stack
+  wait_for_romm "https://localhost:${PORT}"
+  print_summary
 }
 
 remove_stack() {
@@ -740,7 +804,8 @@ main() {
     echo "A streaming test stack already exists here (created $(marker_get CREATED))."
     local action
     choose action "What do you want to do?" \
-      "Update and start it (pull newest images, keep data)" \
+      "Start it (re-pull the pinned images, keep data)" \
+      "Reset RomM's database and config (fixes a broken/stale state, keep GPU/ROM/port)" \
       "Reconfigure it (GPU / ROM path / port, keep data)" \
       "Remove it" \
       "Quit"
@@ -748,9 +813,10 @@ main() {
       1) PORT="$(marker_get PORT)"; ROMS_PATH="$(marker_get ROMS_PATH)"; GPU_MODE="$(marker_get GPU_MODE)"
          SELECTED_GPU_NAME="$(marker_get GPU_NAME)"
          start_stack; wait_for_romm "https://localhost:${PORT}"; print_summary; exit 0 ;;
-      2) install_stack; exit 0 ;;
-      3) remove_stack; exit 0 ;;
-      4) exit 0 ;;
+      2) reset_stack; exit 0 ;;
+      3) install_stack; exit 0 ;;
+      4) remove_stack; exit 0 ;;
+      5) exit 0 ;;
     esac
   fi
 

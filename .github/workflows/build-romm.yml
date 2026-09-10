@@ -56,10 +56,13 @@ jobs:
       - name: Build image
         working-directory: romm
         run: |
-          docker build -t "$IMAGE:latest" -f docker/Dockerfile .
-          docker tag "$IMAGE:latest" "$IMAGE:${{ steps.ref.outputs.sha }}"
+          docker build -t "$IMAGE:${{ steps.ref.outputs.sha }}" -f docker/Dockerfile .
+          # "streaming-v2" is the one tag streaming-tester.sh actually pulls. It
+          # only moves when a maintainer reruns this workflow on purpose (with a
+          # new sha input); it never drifts on its own the way ":latest" would.
+          docker tag "$IMAGE:${{ steps.ref.outputs.sha }}" "$IMAGE:streaming-v2"
 
       - name: Push image
         run: |
-          docker push "$IMAGE:latest"
           docker push "$IMAGE:${{ steps.ref.outputs.sha }}"
+          docker push "$IMAGE:streaming-v2"
