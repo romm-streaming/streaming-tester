@@ -21,7 +21,9 @@ RAW_BASE="${STREAMING_TESTER_RAW:-https://raw.githubusercontent.com/romm-streami
 # Pinned on purpose: this tester exists to get many people testing the SAME
 # known-good streaming build, not whatever upstream happens to be today.
 # These two tags only change when a new release of this script bumps them
-# (RomM built from the emulator-streaming-v2 merge, rommapp/romm#4314;
+# (RomM built from rommapp/romm@bdf4243, master HEAD as of 2026-09-10, which
+# has emulator streaming v2 (rommapp/romm#4314) plus a required argosy-sigil
+# fix the original PR#4314 merge commit itself doesn't build without;
 # webstation matched to the RomM v0.8.0 release it shipped alongside).
 ROMM_IMAGE="ghcr.io/romm-streaming/romm:streaming-v2"
 WEBSTATION_IMAGE="linuxserver/webstation:romm-v0.8.0-ls17"
