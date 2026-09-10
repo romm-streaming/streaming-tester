@@ -6,13 +6,16 @@ on:
   workflow_dispatch:
     inputs:
       sha:
-        description: "Upstream commit SHA to build (defaults to branch HEAD)"
+        description: "Upstream commit SHA to build (defaults to the emulator-streaming-v2 merge commit)"
         required: false
-        default: ""
+        default: "26476f603a1b17b4c4f0ab3e5e9d005c85307526"
 
 env:
-  UPSTREAM_REPO: LoneAngelFayt/romm
-  UPSTREAM_BRANCH: feat/streaming-webstation
+  # emulator-streaming-v2 (rommapp/romm#4314) merged into master on 2026-09-06.
+  # Building from upstream master/HEAD directly, pinned by default to that merge
+  # commit, instead of a personal fork branch that can move or disappear.
+  UPSTREAM_REPO: rommapp/romm
+  UPSTREAM_BRANCH: master
   IMAGE: ghcr.io/${{ github.repository_owner }}/romm
 
 concurrency:
@@ -53,10 +56,13 @@ jobs:
       - name: Build image
         working-directory: romm
         run: |
-          docker build -t "$IMAGE:latest" -f docker/Dockerfile .
-          docker tag "$IMAGE:latest" "$IMAGE:${{ steps.ref.outputs.sha }}"
+          docker build -t "$IMAGE:${{ steps.ref.outputs.sha }}" -f docker/Dockerfile .
+          # "streaming-v2" is the one tag streaming-tester.sh actually pulls. It
+          # only moves when a maintainer reruns this workflow on purpose (with a
+          # new sha input); it never drifts on its own the way ":latest" would.
+          docker tag "$IMAGE:${{ steps.ref.outputs.sha }}" "$IMAGE:streaming-v2"
 
       - name: Push image
         run: |
-          docker push "$IMAGE:latest"
           docker push "$IMAGE:${{ steps.ref.outputs.sha }}"
+          docker push "$IMAGE:streaming-v2"
