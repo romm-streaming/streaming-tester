@@ -113,9 +113,12 @@ that folder. Your ROM library is never touched.
 
 - `streaming-tester.sh` — the installer / remover. Pins exactly two images:
   - `ghcr.io/romm-streaming/romm:streaming-v2` — built by this repo's own
-    workflow (below) from the commit that merged emulator streaming v2 into
-    upstream [rommapp/romm](https://github.com/rommapp/romm)
-    ([rommapp/romm#4314](https://github.com/rommapp/romm/pull/4314)).
+    workflow (below) from a commit on upstream
+    [rommapp/romm](https://github.com/rommapp/romm)'s `master` that has
+    emulator streaming v2
+    ([rommapp/romm#4314](https://github.com/rommapp/romm/pull/4314)) plus a
+    required `argosy-sigil` build fix — the PR's own merge commit doesn't
+    build on its own (its pinned sigil commit fails to link on Alpine/musl).
   - `linuxserver/webstation:romm-v0.8.0-ls17` — the webstation build matched to
     the RomM v0.8.0 release that shipped alongside it.
   - Neither tag moves on its own. Bumping either pin means editing this script

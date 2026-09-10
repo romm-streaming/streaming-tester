@@ -6,14 +6,18 @@ on:
   workflow_dispatch:
     inputs:
       sha:
-        description: "Upstream commit SHA to build (defaults to the emulator-streaming-v2 merge commit)"
+        description: "Upstream commit SHA to build (defaults to the last known-good commit)"
         required: false
-        default: "26476f603a1b17b4c4f0ab3e5e9d005c85307526"
+        default: "bdf42435d609b55077a807f5f0ab597f6cd522fc"
 
 env:
   # emulator-streaming-v2 (rommapp/romm#4314) merged into master on 2026-09-06.
-  # Building from upstream master/HEAD directly, pinned by default to that merge
-  # commit, instead of a personal fork branch that can move or disappear.
+  # The merge commit itself (26476f6...) fails to build: it pins argosy-sigil at
+  # 9665f03c, whose zstd vendoring doesn't link on Alpine/musl. rommapp/argosy-sigil
+  # fixed that in e1fedf83 ("zstd: disable the amd64 assembly..."), and master's
+  # sigil pin picked it up by bdf4243 (2026-09-10), which is what's pinned below.
+  # Building from upstream master/HEAD directly, instead of a personal fork branch
+  # that can move or disappear.
   UPSTREAM_REPO: rommapp/romm
   UPSTREAM_BRANCH: master
   IMAGE: ghcr.io/${{ github.repository_owner }}/romm
