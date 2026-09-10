@@ -6,7 +6,7 @@
 # on a real deployment; for testing, leave it alone.
 #
 # Full reference for every key:
-# https://github.com/LoneAngelFayt/romm/blob/feat/emulator-streaming-v2/examples/config.example.yml
+# https://github.com/rommapp/romm/blob/master/examples/config.example.yml
 
 exclude:
   platforms:

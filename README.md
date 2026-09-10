@@ -92,4 +92,6 @@ that folder. Your ROM library is never touched.
 - `config.yml` — the RomM config the installer drops into the test stack, with
   streaming enabled for every supported platform.
 - `.github/workflows/build-romm.yml` — builds `ghcr.io/romm-streaming/romm` from
-  the upstream streaming branch.
+  upstream [rommapp/romm](https://github.com/rommapp/romm), pinned by default to
+  the commit that merged emulator streaming v2
+  ([rommapp/romm#4314](https://github.com/rommapp/romm/pull/4314)).

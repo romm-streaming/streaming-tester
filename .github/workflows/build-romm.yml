@@ -6,13 +6,16 @@ on:
   workflow_dispatch:
     inputs:
       sha:
-        description: "Upstream commit SHA to build (defaults to branch HEAD)"
+        description: "Upstream commit SHA to build (defaults to the emulator-streaming-v2 merge commit)"
         required: false
-        default: ""
+        default: "26476f603a1b17b4c4f0ab3e5e9d005c85307526"
 
 env:
-  UPSTREAM_REPO: LoneAngelFayt/romm
-  UPSTREAM_BRANCH: feat/streaming-webstation
+  # emulator-streaming-v2 (rommapp/romm#4314) merged into master on 2026-09-06.
+  # Building from upstream master/HEAD directly, pinned by default to that merge
+  # commit, instead of a personal fork branch that can move or disappear.
+  UPSTREAM_REPO: rommapp/romm
+  UPSTREAM_BRANCH: master
   IMAGE: ghcr.io/${{ github.repository_owner }}/romm
 
 concurrency:
