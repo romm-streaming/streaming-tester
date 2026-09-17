@@ -1,23 +1,13 @@
 name: Build RomM image
 
 on:
-  repository_dispatch:
-    types: [romm-commit]
   workflow_dispatch:
-    inputs:
-      sha:
-        description: "Upstream commit SHA to build (defaults to the last known-good commit)"
-        required: false
-        default: "bdf42435d609b55077a807f5f0ab597f6cd522fc"
+  schedule:
+    # Hourly, off the hour: GitHub delays scheduled runs queued at the top of
+    # the hour.
+    - cron: "23 * * * *"
 
 env:
-  # emulator-streaming-v2 (rommapp/romm#4314) merged into master on 2026-09-06.
-  # The merge commit itself (26476f6...) fails to build: it pins argosy-sigil at
-  # 9665f03c, whose zstd vendoring doesn't link on Alpine/musl. rommapp/argosy-sigil
-  # fixed that in e1fedf83 ("zstd: disable the amd64 assembly..."), and master's
-  # sigil pin picked it up by bdf4243 (2026-09-10), which is what's pinned below.
-  # Building from upstream master/HEAD directly, instead of a personal fork branch
-  # that can move or disappear.
   UPSTREAM_REPO: rommapp/romm
   UPSTREAM_BRANCH: master
   IMAGE: ghcr.io/${{ github.repository_owner }}/romm
@@ -33,23 +23,6 @@ jobs:
       contents: read
       packages: write
     steps:
-      - name: Clone upstream branch
-        run: |
-          git clone --branch "$UPSTREAM_BRANCH" "https://github.com/${UPSTREAM_REPO}.git" romm
-
-      - name: Checkout referenced commit
-        id: ref
-        working-directory: romm
-        run: |
-          SHA="${{ github.event.client_payload.sha || github.event.inputs.sha }}"
-          if [ -n "$SHA" ]; then
-            git fetch origin "$SHA"
-            git checkout "$SHA"
-          fi
-          FULL=$(git rev-parse HEAD)
-          echo "sha=$FULL" >> "$GITHUB_OUTPUT"
-          echo "Building ${UPSTREAM_REPO}@${FULL}"
-
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -57,16 +30,39 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build image
-        working-directory: romm
+      # Each build is also tagged with its upstream commit, and that tag is
+      # pushed last, so an existing tag means streaming-v2 already has it.
+      - name: Find the upstream commit
+        id: ref
         run: |
-          docker build -t "$IMAGE:${{ steps.ref.outputs.sha }}" -f docker/Dockerfile .
-          # "streaming-v2" is the one tag streaming-tester.sh actually pulls. It
-          # only moves when a maintainer reruns this workflow on purpose (with a
-          # new sha input); it never drifts on its own the way ":latest" would.
-          docker tag "$IMAGE:${{ steps.ref.outputs.sha }}" "$IMAGE:streaming-v2"
+          sha="$(git ls-remote "https://github.com/${UPSTREAM_REPO}.git" "refs/heads/${UPSTREAM_BRANCH}" | cut -f1)"
+          if ! [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Could not read ${UPSTREAM_REPO} ${UPSTREAM_BRANCH}: '$sha'"
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          if docker buildx imagetools inspect "$IMAGE:$sha" >/dev/null 2>&1; then
+            echo "${UPSTREAM_REPO}@${sha} is already built"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Building ${UPSTREAM_REPO}@${sha}"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build image
+        if: steps.ref.outputs.build == 'true'
+        env:
+          SHA: ${{ steps.ref.outputs.sha }}
+        run: |
+          git init --quiet romm
+          git -C romm fetch --quiet --depth 1 "https://github.com/${UPSTREAM_REPO}.git" "$SHA"
+          git -C romm checkout --quiet FETCH_HEAD
+          docker build -t "$IMAGE:$SHA" -t "$IMAGE:streaming-v2" -f romm/docker/Dockerfile romm
 
       - name: Push image
+        if: steps.ref.outputs.build == 'true'
+        env:
+          SHA: ${{ steps.ref.outputs.sha }}
         run: |
-          docker push "$IMAGE:${{ steps.ref.outputs.sha }}"
           docker push "$IMAGE:streaming-v2"
+          docker push "$IMAGE:$SHA"
