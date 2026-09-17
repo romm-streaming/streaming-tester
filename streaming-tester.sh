@@ -18,15 +18,11 @@
 set -euo pipefail
 
 RAW_BASE="${STREAMING_TESTER_RAW:-https://raw.githubusercontent.com/romm-streaming/streaming-tester/main}"
-# Pinned on purpose: this tester exists to get many people testing the SAME
-# known-good streaming build, not whatever upstream happens to be today.
-# These two tags only change when a new release of this script bumps them
-# (RomM built from rommapp/romm@bdf4243, master HEAD as of 2026-09-10, which
-# has emulator streaming v2 (rommapp/romm#4314) plus a required argosy-sigil
-# fix the original PR#4314 merge commit itself doesn't build without;
-# webstation matched to the RomM v0.8.0 release it shipped alongside).
+# Rolling tags: this repo's CI rebuilds both images from upstream RomM master
+# and linuxserver/docker-webstation's romm branch, and moves streaming-v2 to
+# each new build, so fixes reach testers without a new release of this script.
 ROMM_IMAGE="ghcr.io/romm-streaming/romm:streaming-v2"
-WEBSTATION_IMAGE="linuxserver/webstation:romm-v0.8.0-ls17"
+WEBSTATION_IMAGE="ghcr.io/romm-streaming/webstation:streaming-v2"
 DB_IMAGE="mariadb:11"
 PROXY_IMAGE="caddy:2"
 PROJECT="streaming-test"
@@ -110,6 +106,20 @@ choose() { # choose VAR "prompt" "opt1" "opt2" ... -> VAR = 1-based index
 marker_get() { # marker_get KEY
   [ -f "$MARKER" ] || return 0
   grep -m1 "^$1=" "$MARKER" 2>/dev/null | cut -d= -f2- || true
+}
+
+# The settings write_stack needs, from the last install instead of the prompts.
+load_marker_settings() {
+  PORT="$(marker_get PORT)"; ROMS_PATH="$(marker_get ROMS_PATH)"; GPU_MODE="$(marker_get GPU_MODE)"
+  SELECTED_GPU_NAME="$(marker_get GPU_NAME)"; SELECTED_GPU_INDEX="$(marker_get GPU_INDEX)"
+  if [ "$GPU_MODE" = "nvidia" ]; then
+    NVIDIA_MODESET_DEV=""
+    if [ -e /dev/nvidia-modeset ]; then
+      NVIDIA_MODESET_DEV=/dev/nvidia-modeset
+    else
+      NVIDIA_MODESET_WARN=1
+    fi
+  fi
 }
 
 env_get() { # env_get KEY (from existing .env)
@@ -517,14 +527,10 @@ CADDY
 #
 #   ${COMPOSE_CMD} up -d      start
 #   ${COMPOSE_CMD} down       stop
-#   ${COMPOSE_CMD} pull && ${COMPOSE_CMD} up -d   re-fetch these exact pinned
-#                                                 images (fixes a corrupted
-#                                                 local layer; does NOT change
-#                                                 what version you're testing)
+#   ${COMPOSE_CMD} pull && ${COMPOSE_CMD} up -d   update to the newest build
 #
-# Image tags are pinned by streaming-tester.sh itself, not by this compose
-# file. To test a newer build, re-run the installer once a new version of
-# streaming-tester.sh raises the pin.
+# The streaming-v2 images below follow upstream. Re-running the installer and
+# choosing "Start it" also updates, and regenerates this file.
 
 services:
   romm:
@@ -679,11 +685,13 @@ print_summary() {
   RomM image: ${ROMM_IMAGE}
   Webstation image: ${WEBSTATION_IMAGE}
 
-  Found a bug? Everyone running this script is on the exact same pinned
-  images above, so please report it (not in core RomM support channels):
+  To update to the newest build, re-run the installer here and choose
+  "Start it". Both images follow upstream as it changes.
+
+  Found a bug? Please report it (not in core RomM support channels):
     ${ISSUES_URL}
-  Include the two image lines above plus your GPU/driver info exactly as
-  printed here — that's the whole point of testing one pinned build.
+  Include the two image lines above, when you last installed or updated, and
+  your GPU/driver info exactly as printed here.
 TXT
   if [ -n "${NVIDIA_MODESET_WARN:-}" ]; then
     warn "/dev/nvidia-modeset was not present when this stack was generated; streaming may not work properly."
@@ -697,10 +705,9 @@ reset_stack() {
   hr
   printf '%sThis resets RomM'"'"'s database and config in:%s %s\n' "$C_YEL" "$C_RST" "$STACK_DIR"
   hr
-  echo "Everyone testing this stack is on the same pinned images, so a broken"
-  echo "database migration or stale config is almost always fixed by starting"
-  echo "RomM's data fresh. This clears the RomM database, config, and library"
-  echo "metadata/cache. It keeps:"
+  echo "A broken database migration or stale config is almost always fixed by"
+  echo "starting RomM's data fresh. This clears the RomM database, config, and"
+  echo "library metadata/cache. It keeps:"
   echo "  - your GPU / ROM path / port settings"
   echo "  - the webstation home folder and TLS certificate"
   echo "  - your ROM library (never touched)"
@@ -715,16 +722,7 @@ reset_stack() {
   info "Clearing RomM database and config"
   rm -rf romm-db romm-config romm-resources romm-assets romm-redis-data
 
-  PORT="$(marker_get PORT)"; ROMS_PATH="$(marker_get ROMS_PATH)"; GPU_MODE="$(marker_get GPU_MODE)"
-  SELECTED_GPU_NAME="$(marker_get GPU_NAME)"
-  if [ "$GPU_MODE" = "nvidia" ]; then
-    NVIDIA_MODESET_DEV=""
-    if [ -e /dev/nvidia-modeset ]; then
-      NVIDIA_MODESET_DEV=/dev/nvidia-modeset
-    else
-      NVIDIA_MODESET_WARN=1
-    fi
-  fi
+  load_marker_settings
   write_stack
   start_stack
   wait_for_romm "https://localhost:${PORT}"
@@ -806,14 +804,15 @@ main() {
     echo "A streaming test stack already exists here (created $(marker_get CREATED))."
     local action
     choose action "What do you want to do?" \
-      "Start it (re-pull the pinned images, keep data)" \
+      "Start it (update to the newest build, keep data)" \
       "Reset RomM's database and config (fixes a broken/stale state, keep GPU/ROM/port)" \
       "Reconfigure it (GPU / ROM path / port, keep data)" \
       "Remove it" \
       "Quit"
     case "$action" in
-      1) PORT="$(marker_get PORT)"; ROMS_PATH="$(marker_get ROMS_PATH)"; GPU_MODE="$(marker_get GPU_MODE)"
-         SELECTED_GPU_NAME="$(marker_get GPU_NAME)"
+      # Regenerating the stack files moves an install made by an older version
+      # of this script onto the current image tags.
+      1) load_marker_settings; write_stack
          start_stack; wait_for_romm "https://localhost:${PORT}"; print_summary; exit 0 ;;
       2) reset_stack; exit 0 ;;
       3) install_stack; exit 0 ;;
