@@ -25,7 +25,7 @@ from. It never touches an existing RomM install:
 - Streaming is enabled for **every** platform the webstation container can
   serve, so you can test whatever you own.
 - **No version picking.** The script always uses the same two rolling image
-  tags, which this repo rebuilds as upstream RomM and webstation change. See
+  tags, which move as upstream RomM and webstation change. See
   [What's in this repo](#whats-in-this-repo).
 
 Everything is removable with one command.
@@ -114,22 +114,14 @@ that folder. Your ROM library is never touched.
 - `streaming-tester.sh`: the installer and remover. It uses two rolling tags:
   - `ghcr.io/romm-streaming/romm:streaming-v2`, built from upstream
     [rommapp/romm](https://github.com/rommapp/romm)'s `master`.
-  - `ghcr.io/romm-streaming/webstation:streaming-v2`, built from
-    [linuxserver/docker-webstation](https://github.com/linuxserver/docker-webstation)'s
-    `romm` branch with the latest
+  - `lscr.io/linuxserver/webstation:romm`, linuxserver.io's webstation image,
+    which they rebuild for each
     [romm-broker](https://github.com/romm-streaming/romm-broker) release.
 - `config.yml`: the RomM config the installer drops into the test stack, with
   streaming enabled for every supported platform.
-- `.github/workflows/build-romm.yml`: checks upstream hourly, builds any new
-  `master` commit, and moves `streaming-v2` to it.
-- `.github/workflows/build-webstation.yml`: checks hourly for a new commit to
-  the webstation `Dockerfile` or `root/`, or a new romm-broker release, builds
-  it, and moves `streaming-v2` to it once
-  `.github/scripts/webstation-boot-test.sh` passes.
+- `.github/workflows/build-romm.yml`: RomM only publishes images for releases,
+  so this checks upstream hourly, builds any new `master` commit, and moves
+  `streaming-v2` to it.
 
-Maintainer notes:
-
-- After the first webstation build, make the `webstation` package public in the
-  organization's package settings, or testers can't pull it.
-- GitHub disables scheduled workflows after 60 days without repository
-  activity. If builds stop, enable both workflows again on the Actions tab.
+GitHub disables scheduled workflows after 60 days without repository activity.
+If RomM builds stop, enable the workflow again on the Actions tab.
