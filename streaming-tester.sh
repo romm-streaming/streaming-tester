@@ -18,11 +18,12 @@
 set -euo pipefail
 
 RAW_BASE="${STREAMING_TESTER_RAW:-https://raw.githubusercontent.com/romm-streaming/streaming-tester/main}"
-# Rolling tags: this repo's CI rebuilds both images from upstream RomM master
-# and linuxserver/docker-webstation's romm branch, and moves streaming-v2 to
-# each new build, so fixes reach testers without a new release of this script.
+# Rolling tags, so fixes reach testers without a new release of this script.
+# RomM publishes images only for releases, so this repo's CI rebuilds
+# streaming-v2 from upstream master. linuxserver.io moves webstation's romm tag
+# to each romm-broker release.
 ROMM_IMAGE="ghcr.io/romm-streaming/romm:streaming-v2"
-WEBSTATION_IMAGE="ghcr.io/romm-streaming/webstation:streaming-v2"
+WEBSTATION_IMAGE="lscr.io/linuxserver/webstation:romm"
 DB_IMAGE="mariadb:11"
 PROXY_IMAGE="caddy:2"
 PROJECT="streaming-test"
@@ -529,8 +530,8 @@ CADDY
 #   ${COMPOSE_CMD} down       stop
 #   ${COMPOSE_CMD} pull && ${COMPOSE_CMD} up -d   update to the newest build
 #
-# The streaming-v2 images below follow upstream. Re-running the installer and
-# choosing "Start it" also updates, and regenerates this file.
+# Both images below follow upstream. Re-running the installer and choosing
+# "Start it" also updates, and regenerates this file.
 
 services:
   romm:
