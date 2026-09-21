@@ -114,9 +114,8 @@ that folder. Your ROM library is never touched.
 - `streaming-tester.sh`: the installer and remover. It uses two rolling tags:
   - `ghcr.io/romm-streaming/romm:streaming-v2`, built from upstream
     [rommapp/romm](https://github.com/rommapp/romm)'s `master`.
-  - `lscr.io/linuxserver/webstation:romm`, linuxserver.io's webstation image,
-    which they rebuild for each
-    [romm-broker](https://github.com/romm-streaming/romm-broker) release.
+  - `taisun/random-images:webstation-romm`, the webstation image, rebuilt for
+    each [romm-broker](https://github.com/romm-streaming/romm-broker) release.
 - `config.yml`: the RomM config the installer drops into the test stack, with
   streaming enabled for every supported platform.
 - `.github/workflows/build-romm.yml`: RomM only publishes images for releases,
