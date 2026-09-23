@@ -23,7 +23,7 @@ RAW_BASE="${STREAMING_TESTER_RAW:-https://raw.githubusercontent.com/romm-streami
 # streaming-v2 from upstream master. linuxserver.io moves webstation's romm tag
 # to each romm-broker release.
 ROMM_IMAGE="ghcr.io/romm-streaming/romm:streaming-v2"
-WEBSTATION_IMAGE="taisun/random-images:webstation-romm"
+WEBSTATION_IMAGE="lscr.io/linuxserver/webstation:romm"
 DB_IMAGE="mariadb:11"
 PROXY_IMAGE="caddy:2"
 PROJECT="streaming-test"
