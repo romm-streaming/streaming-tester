@@ -11,6 +11,10 @@ env:
   UPSTREAM_REPO: rommapp/romm
   UPSTREAM_BRANCH: master
   IMAGE: ghcr.io/${{ github.repository_owner }}/romm
+  ALERT_TITLE: "Build RomM image is failing"
+  # The repo has no watchers, so the alert issue is assigned to and mentions
+  # the maintainer to make sure someone is notified.
+  ALERT_ASSIGNEE: LoneAngelFayt
 
 concurrency:
   group: build-romm
@@ -29,6 +33,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Upstream's Dockerfile can need BuildKit features newer than the
+      # runner's Docker Engine (ADD --checksum on a Git URL failed on
+      # ubuntu-24.04's Docker 28 for most of October 2026). A buildx builder
+      # runs current BuildKit whatever image ubuntu-latest maps to.
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
 
       # Each build is also tagged with its upstream commit, and that tag is
       # pushed last, so an existing tag means streaming-v2 already has it.
@@ -49,7 +60,7 @@ jobs:
             echo "build=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build image
+      - name: Build and push image
         if: steps.ref.outputs.build == 'true'
         env:
           SHA: ${{ steps.ref.outputs.sha }}
@@ -57,12 +68,48 @@ jobs:
           git init --quiet romm
           git -C romm fetch --quiet --depth 1 "https://github.com/${UPSTREAM_REPO}.git" "$SHA"
           git -C romm checkout --quiet FETCH_HEAD
-          docker build -t "$IMAGE:$SHA" -t "$IMAGE:streaming-v2" -f romm/docker/Dockerfile romm
+          docker buildx build --push --provenance=false -t "$IMAGE:streaming-v2" -f romm/docker/Dockerfile romm
 
-      - name: Push image
+      - name: Tag the upstream commit
         if: steps.ref.outputs.build == 'true'
         env:
           SHA: ${{ steps.ref.outputs.sha }}
+        run: docker buildx imagetools create -t "$IMAGE:$SHA" "$IMAGE:streaming-v2"
+
+  # A red scheduled run only emails whoever last edited the cron, so a broken
+  # build went unseen for a month. Keep one open issue while builds fail and
+  # close it on the next green run.
+  alert:
+    needs: build
+    if: always() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RESULT: ${{ needs.build.result }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Open or close the failure issue
         run: |
-          docker push "$IMAGE:streaming-v2"
-          docker push "$IMAGE:$SHA"
+          open="$(gh issue list --state open --search "in:title \"${ALERT_TITLE}\"" --json number,title \
+            --jq 'map(select(.title == env.ALERT_TITLE)) | .[0].number // empty')"
+          case "$RESULT" in
+            failure)
+              if [ -z "$open" ]; then
+                gh issue create --title "$ALERT_TITLE" --assignee "$ALERT_ASSIGNEE" \
+                  --body "@${ALERT_ASSIGNEE} the scheduled build failed: ${RUN_URL}. This issue closes on the next green run."
+              else
+                echo "Issue #${open} is already open"
+              fi
+              ;;
+            success)
+              if [ -n "$open" ]; then
+                gh issue close "$open" --comment "Green again: ${RUN_URL}"
+              fi
+              ;;
+            *)
+              echo "Build result was ${RESULT}; no change"
+              ;;
+          esac
